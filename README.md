@@ -11,6 +11,7 @@ cd stella_vslam
 
 ## Step 2: Build the Docker Image
 Ensure you are using the correct Dockerfile name and command for the build.
+Dockerfile.iridescense vs Dockerfile.iridescence
 
 ### Standard Build Command
 Use the following command to build the Docker image:
