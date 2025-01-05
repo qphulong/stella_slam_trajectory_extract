@@ -8,17 +8,36 @@ from scipy.spatial.transform import Rotation as R
 def parse_slam_data(file_path):
     data = np.loadtxt(file_path)
     timestamps = data[:, 0]
-    positions = data[:, 1:4]  # x, y, z coordinates
+    
+    # Swap x and z coordinates
+    positions = data[:, 1:4]
+    positions[:, [0, 2]] = positions[:, [2, 0]]  # Swap x (index 0) and z (index 2), z,y,x
+    
     quaternions = data[:, 4:]  # qx, qy, qz, qw
     return timestamps, positions, quaternions
 
 # === Step 2: 3D Visualization ===
 def plot_3d_trajectory(positions):
+    """
+    x, y, z
+    x, z, y
+    """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
     # Plot the 3D path using dots
     ax.scatter(positions[:, 0], positions[:, 2], positions[:, 1], c=np.linspace(0, 1, len(positions)), cmap='viridis')
+
+    # Draw the axes: X (forward), Y (upward), Z (right)
+    max_range = np.ptp(positions, axis=0).max()  # Get the maximum range for scaling
+    center = positions.mean(axis=0)
+
+    # Draw X axis (forward)
+    ax.quiver(center[0], center[1], center[2], max_range / 5, 0, 0, color='red', label='X (Forward)')
+    # Draw Y axis (upward)
+    ax.quiver(center[0], center[1], center[2], 0, 0, max_range / 5, color='green', label='Y (Upward)')
+    # Draw Z axis (right)
+    ax.quiver(center[0], center[1], center[2], 0, max_range / 5, 0, color='blue', label='Z (Right)')
 
     # Set labels
     ax.set_title("Camera Trajectory in 3D Space")
@@ -27,15 +46,17 @@ def plot_3d_trajectory(positions):
     ax.set_zlabel("Y (Upward)")
 
     # Set the aspect ratio of the axes to be 1:1:1
-    max_range = np.ptp(positions, axis=0).max()  # Get the maximum range for scaling
     mid_x = (positions[:, 0].min() + positions[:, 0].max()) / 2
     mid_y = (positions[:, 1].min() + positions[:, 1].max()) / 2
     mid_z = (positions[:, 2].min() + positions[:, 2].max()) / 2
     
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_z - max_range, mid_z + max_range)
-    ax.set_zlim(mid_y - max_range, mid_y + max_range)
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)# x points toward
+    ax.set_ylim(mid_y + max_range, mid_y - max_range)# z points to the right
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)# y points upward
 
+    ax.view_init(elev=25, azim=-170,roll = 0) # rotate for easy visualization
+
+    ax.legend()
     plt.show()
 
 
@@ -50,7 +71,9 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     frame_idx = 0
-    trajectory_points = []  # To store mapped points
+
+    # Initial rotation to align with the right-hand rule (X-forward, Z-right, Y-up)
+    initial_rotation = R.from_euler('xyz', [0, 0, 0], degrees=False)  # Identity rotation
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -63,29 +86,33 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         # Find the closest timestamp index in the SLAM data
         idx = np.argmin(np.abs(timestamps - current_time))
 
-        # Transform the position using the quaternion
-        position = positions[idx]
+        # Get the current quaternion and compute total rotation
         quaternion = quaternions[idx]
-        rotation = R.from_quat(quaternion)  # Create a rotation object
-        transformed_position = rotation.apply(position)  # Rotate the position
+        current_rotation = R.from_quat(quaternion)  # Rotation from SLAM data
 
-        # Convert 3D position to spherical coordinates
-        x, y, z = transformed_position
-        longitude = np.arctan2(y, x)  # Angle in the XY-plane
-        latitude = np.arctan2(z, np.sqrt(x**2 + y**2))  # Angle from the XY-plane
+        # Combine the initial rotation with the current camera rotation
+        total_rotation = current_rotation * initial_rotation
 
-        # Map spherical coordinates to equirectangular projection
-        px = int((longitude + np.pi) / (2 * np.pi) * width)  # Normalize longitude to [0, 2π]
-        py = int((np.pi / 2 - latitude) / np.pi * height)    # Normalize latitude to [0, π]
+        # Transform all trajectory points relative to the current camera orientation
+        transformed_positions = total_rotation.apply(positions - positions[idx])
 
-        # Add the point to the trajectory
-        trajectory_points.append((px, py))
+        # Overlay the transformed positions
+        overlay_frame = frame.copy()
 
-        # Draw the trajectory up to the current frame
-        for px, py in trajectory_points:
-            cv2.circle(frame, (px, py), 3, (0, 255, 0), -1)
+        for pos in transformed_positions:
+            # Convert 3D position to spherical coordinates
+            x, y, z = pos
+            longitude = np.arctan2(y, x)  # Angle in the XY-plane
+            latitude = np.arctan2(z, np.sqrt(x**2 + y**2))  # Angle from the XY-plane
 
-        out.write(frame)
+            # Map spherical coordinates to equirectangular projection
+            px = int((longitude + np.pi) / (2 * np.pi) * width)  # Normalize longitude to [0, 2π]
+            py = int((np.pi / 2 - latitude) / np.pi * height)    # Normalize latitude to [0, π]
+
+            if 0 <= px < width and 0 <= py < height:  # Ensure the points are within bounds
+                cv2.circle(overlay_frame, (px, py), 3, (0, 255, 0), -1)
+
+        out.write(overlay_frame)
         frame_idx += 1
 
     cap.release()
@@ -101,10 +128,10 @@ def main():
     timestamps, positions, quaternions = parse_slam_data(trajectory_file)
 
     # 3D visualization
-    # plot_3d_trajectory(positions)
+    plot_3d_trajectory(positions)
 
     # Overlay trajectory on video
-    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
+    # overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
 
 if __name__ == "__main__":
     main()
