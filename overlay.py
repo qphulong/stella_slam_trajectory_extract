@@ -63,21 +63,24 @@ def plot_3d_trajectory(positions):
 
 # === Step 3: Overlay Path on Video ===
 def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, positions, quaternions):
+    # Open video file
     cap = cv2.VideoCapture(video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+    # Prepare video writer
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+    # Frame index initialization
     frame_idx = 0
 
-    # Offset the trajectory path by lowering it 1.6 meters for better visibility
+    # Adjust Y for visualization (lower the trajectory visually)
     visualized_positions = positions.copy()
-    visualized_positions[:, 1] -= 0.4
+    visualized_positions[:, 1] -= 0.45  # Apply Y-offset for visualization adjustment
 
-    # Initial rotation to align with the right-hand rule (X-forward, Z-right, Y-up)
+    # Initial rotation for alignment (adjust if needed)
     initial_rotation = R.from_euler('xyz', [0, 0, 0], degrees=False)  # Identity rotation
 
     while cap.isOpened():
@@ -101,7 +104,7 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         # Transform all trajectory points relative to the current camera orientation
         transformed_positions = total_rotation.apply(visualized_positions - positions[idx])
 
-        # Overlay the transformed positions
+        # Overlay the transformed positions on the frame
         overlay_frame = frame.copy()
 
         for pos in transformed_positions:
@@ -114,14 +117,18 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
             px = int((longitude + np.pi) / (2 * np.pi) * width)  # Normalize longitude to [0, 2π]
             py = int((np.pi / 2 - latitude) / np.pi * height)    # Normalize latitude to [0, π]
 
-            if 0 <= px < width and 0 <= py < height:  # Ensure the points are within bounds
-                cv2.circle(overlay_frame, (px, py), 3, (0, 255, 0), -1)
+            # Draw trajectory point if within frame bounds
+            if 0 <= px < width and 0 <= py < height:
+                cv2.circle(overlay_frame, (px, py), 1, (0, 255, 0), -1)  # Green circle
 
+        # Write the frame to the output video
         out.write(overlay_frame)
         frame_idx += 1
 
+    # Release resources
     cap.release()
     out.release()
+
 
 # === Main Function ===
 def main():
@@ -136,6 +143,8 @@ def main():
     plot_3d_trajectory(positions)
 
     # Overlay trajectory on video
+    positions[:,0]*=5
+    positions[:,2]*=5
     overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
 
 if __name__ == "__main__":
