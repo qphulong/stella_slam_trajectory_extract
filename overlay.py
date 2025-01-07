@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import cv2
 from scipy.spatial.transform import Rotation as R
+from pprint import pprint
 
 # === Step 1: Parse SLAM Data ===
 def parse_slam_data(file_path):
@@ -72,6 +73,10 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
 
     frame_idx = 0
 
+    # Offset the trajectory path by lowering it 1.6 meters for better visibility
+    visualized_positions = positions.copy()
+    visualized_positions[:, 1] -= 0.4
+
     # Initial rotation to align with the right-hand rule (X-forward, Z-right, Y-up)
     initial_rotation = R.from_euler('xyz', [0, 0, 0], degrees=False)  # Identity rotation
 
@@ -94,7 +99,7 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         total_rotation = current_rotation * initial_rotation
 
         # Transform all trajectory points relative to the current camera orientation
-        transformed_positions = total_rotation.apply(positions - positions[idx])
+        transformed_positions = total_rotation.apply(visualized_positions - positions[idx])
 
         # Overlay the transformed positions
         overlay_frame = frame.copy()
@@ -102,8 +107,8 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         for pos in transformed_positions:
             # Convert 3D position to spherical coordinates
             x, y, z = pos
-            longitude = np.arctan2(y, x)  # Angle in the XY-plane
-            latitude = np.arctan2(z, np.sqrt(x**2 + y**2))  # Angle from the XY-plane
+            longitude = np.arctan2(z, x)  # Z is to the right, X is forward
+            latitude = np.arctan2(y, np.sqrt(x**2 + z**2))  # Y is upward
 
             # Map spherical coordinates to equirectangular projection
             px = int((longitude + np.pi) / (2 * np.pi) * width)  # Normalize longitude to [0, 2π]
@@ -131,7 +136,7 @@ def main():
     plot_3d_trajectory(positions)
 
     # Overlay trajectory on video
-    # overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
+    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
 
 if __name__ == "__main__":
     main()
