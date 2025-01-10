@@ -4,6 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import cv2
 from scipy.spatial.transform import Rotation as R
 from pprint import pprint
+import os
 
 # === Step 1: Parse SLAM Data ===
 def parse_slam_data(file_path):
@@ -129,11 +130,28 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
     cap.release()
     out.release()
 
+def get_video_name():
+    """Get the name of video in ./input directory"""
+    input_dir = './input/'
+
+    # List all files in the directory
+    files = [f for f in os.listdir(input_dir) if f.endswith('.mp4')]
+
+    # Check if there is exactly one .mp4 file
+    if len(files) == 1:
+        # Store the name of the .mp4 file
+        video_name = files[0]
+        print(f"Video name: {video_name}")
+        return video_name
+    else:
+        # Raise an error if the condition is not met
+        raise ValueError("The directory must contain exactly one .mp4 file.")
 
 # === Main Function ===
 def main():
+    video_name = get_video_name()    
     trajectory_file = "./output/frame_trajectory.txt"  # Path to trajectory file
-    video_file = "./input/tokyo_0800_1010.mp4"  # Path to input video
+    video_file = f"./input/{video_name}"  # Path to input video
     output_video_file = "output_video_with_trajectory.mp4"  # Path for saving output video
 
     # Parse SLAM data
