@@ -11,7 +11,7 @@ def trim_video(input_file, output_file, start_time, end_time):
     video = VideoFileClip(input_file)
     
     # Trim the video from start_time to end_time
-    trimmed_video = video.subclip(start_time, end_time)
+    trimmed_video = video.subclipped(start_time, end_time)
     
     # Write the trimmed video to the output file
     trimmed_video.write_videofile(output_file, codec="libx264")

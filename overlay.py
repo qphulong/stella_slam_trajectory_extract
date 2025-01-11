@@ -63,7 +63,7 @@ def plot_3d_trajectory(positions):
 
 
 # === Step 3: Overlay Path on Video ===
-def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, positions, quaternions):
+def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, positions, quaternions, interval):
     # Open video file
     cap = cv2.VideoCapture(video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -95,6 +95,13 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         # Find the closest timestamp index in the SLAM data
         idx = np.argmin(np.abs(timestamps - current_time))
 
+        # Get the time range for the interval
+        start_time = current_time - interval
+        end_time = current_time + interval
+
+        # Find indices of timestamps within the interval
+        interval_indices = np.where((timestamps >= start_time) & (timestamps <= end_time))[0]
+
         # Get the current quaternion and compute total rotation
         quaternion = quaternions[idx]
         current_rotation = R.from_quat(quaternion)  # Rotation from SLAM data
@@ -102,13 +109,14 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
         # Combine the initial rotation with the current camera rotation
         total_rotation = current_rotation * initial_rotation
 
-        # Transform all trajectory points relative to the current camera orientation
+        # Transform trajectory points within the interval relative to the current camera orientation
         transformed_positions = total_rotation.apply(visualized_positions - positions[idx])
 
         # Overlay the transformed positions on the frame
         overlay_frame = frame.copy()
 
-        for pos in transformed_positions:
+        for i in interval_indices:
+            pos = transformed_positions[i]
             # Convert 3D position to spherical coordinates
             x, y, z = pos
             longitude = np.arctan2(z, x)  # Z is to the right, X is forward
@@ -120,7 +128,15 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
 
             # Draw trajectory point if within frame bounds
             if 0 <= px < width and 0 <= py < height:
-                cv2.circle(overlay_frame, (px, py), 1, (0, 255, 0), -1)  # Green circle
+                # Use color to indicate time proximity (e.g., green for current, red for past, blue for future)
+                if timestamps[i] < current_time:
+                    color = (0, 0, 255)  # Red for past
+                elif timestamps[i] > current_time:
+                    color = (255, 0, 0)  # Blue for future
+                else:
+                    color = (0, 255, 0)  # Green for current
+
+                cv2.circle(overlay_frame, (px, py), 1, color, -1)
 
         # Write the frame to the output video
         out.write(overlay_frame)
@@ -129,6 +145,7 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
     # Release resources
     cap.release()
     out.release()
+
 
 def get_video_name():
     """Get the name of video in ./input directory"""
@@ -163,7 +180,7 @@ def main():
     # Overlay trajectory on video
     positions[:,0]*=5
     positions[:,2]*=5
-    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions)
+    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions,10)
 
 if __name__ == "__main__":
     main()
