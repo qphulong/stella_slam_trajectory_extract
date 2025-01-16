@@ -38,4 +38,4 @@ if __name__ == "__main__":
     main()
 
 # Example usage
-# python3 trim.py kyoto.mp4 output_video.mp4 3:10 4:39
+# python3 utils/trim.py kyoto.mp4 o.mp4 3:10 4:39

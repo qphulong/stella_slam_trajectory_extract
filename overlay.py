@@ -14,6 +14,9 @@ def parse_slam_data(file_path):
     # Swap x and z coordinates
     positions = data[:, 1:4]
     positions[:, [0, 2]] = positions[:, [2, 0]]  # Swap x (index 0) and z (index 2), z,y,x
+
+    # Reverse y
+    positions[:, 1] = 0 - positions[:, 1]
     
     quaternions = data[:, 4:]  # qx, qy, qz, qw
     return timestamps, positions, quaternions
@@ -130,13 +133,13 @@ def overlay_trajectory_on_vr360_video(video_path, output_path, timestamps, posit
             if 0 <= px < width and 0 <= py < height:
                 # Use color to indicate time proximity (e.g., green for current, red for past, blue for future)
                 if timestamps[i] < current_time:
-                    color = (0, 0, 255)  # Red for past
+                    color = (0, 255, 255)  # Yellow for past
                 elif timestamps[i] > current_time:
-                    color = (255, 0, 0)  # Blue for future
+                    color = (0, 255, 0)  # Green for future
                 else:
                     color = (0, 255, 0)  # Green for current
 
-                cv2.circle(overlay_frame, (px, py), 1, color, -1)
+                cv2.circle(overlay_frame, (px, py), 2, color, -1)
 
         # Write the frame to the output video
         out.write(overlay_frame)
@@ -180,7 +183,7 @@ def main():
     # Overlay trajectory on video
     positions[:,0]*=5
     positions[:,2]*=5
-    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions,10)
+    overlay_trajectory_on_vr360_video(video_file, output_video_file, timestamps, positions, quaternions,30)
 
 if __name__ == "__main__":
     main()
